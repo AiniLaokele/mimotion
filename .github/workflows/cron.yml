@@ -1,9 +1,5 @@
 name: Random Cron
 
-# 允许 GitHub Actions 写入仓库内容
-permissions:
-  contents: write
-
 on:
   workflow_run:
     workflows: ["刷步数"]
@@ -16,18 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
 
-    # 刷步数成功后才执行；也允许手动执行
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
-      # 拉取仓库代码，使用 GitHub 自带的 Token
       - name: Checkout codes
         uses: actions/checkout@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT }}
           persist-credentials: true
 
-      # 随机修改下一次执行时间
       - name: Random Cron
         env:
           CRON_HOURS: ${{ vars.CRON_HOURS }}
@@ -41,14 +34,11 @@ jobs:
 
           persist_execute_log "$EVENT_NAME" "$CRON_HOURS"
 
-          # 配置 Git 用户
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # 添加修改
           git add -A
 
-          # 有修改才提交和推送
           if ! git diff --cached --quiet; then
             current=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')
 
