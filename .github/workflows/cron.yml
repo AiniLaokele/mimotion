@@ -1,4 +1,10 @@
+```yaml
 name: Random Cron
+
+# 允许 GitHub Actions 写入仓库内容
+permissions:
+  contents: write
+
 on:
   workflow_run:
     workflows: ["刷步数"]
@@ -10,19 +16,49 @@ jobs:
   repo-sync:
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+
+    # 刷步数成功后才执行；也允许手动执行
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
     steps:
-      - uses: actions/checkout@v3
+      # 拉取仓库代码，使用 GitHub 自带的 Token
+      - name: Checkout codes
+        uses: actions/checkout@v5
         with:
-          token: ${{ secrets.PAT }} #此处PAT需要申请，教程详见：README
-      - name: random cron
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      # 随机修改下一次执行时间
+      - name: Random Cron
+        env:
+          CRON_HOURS: ${{ vars.CRON_HOURS }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          set -e
+
           source cron_convert.sh
-          echo "configed CRON_HOURS ${{ vars.CRON_HOURS }}"
-          persist_execute_log ${{ github.event_name }} ${{ vars.CRON_HOURS }}
-          git config user.name github-actions
-          git config user.email github-actions@users.noreply.github.com
-          git add .
-          current=`TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S'`
-          git commit -m "[${current}] random cron trigger by ${{ github.event_name }}"
-          git push origin master
+
+          echo "configured CRON_HOURS: ${CRON_HOURS}"
+
+          persist_execute_log "$EVENT_NAME" "$CRON_HOURS"
+
+          # 配置 Git 用户
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 添加修改
+          git add -A
+
+          # 有修改才提交和推送
+          if ! git diff --cached --quiet; then
+            current=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')
+
+            git commit -m "[${current}] random cron trigger by ${EVENT_NAME}"
+
+            git push origin HEAD:master
+
+            echo "随机定时任务更新成功！"
+          else
+            echo "没有文件变化，跳过提交和推送。"
+          fi
+```
